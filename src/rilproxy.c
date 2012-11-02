@@ -68,6 +68,11 @@ static const int SUB_ID_SIZE = 4;
 static const int DATA_SIZE = 4;
 static const int HEADER_SIZE = 8; // SUB_ID_SIZE + DATA_SIZE
 
+// RilRawData maximum size
+static const int RIL_MAX_DATA_SIZE = 1024;
+// RildData maximum size
+static const int RILD_MAX_DATA_SIZE = 1032; // RIL_MAX_DATA_SIZE + HEADER_SIZE
+
 void switchUser() {
   prctl(PR_SET_KEEPCAPS, 1, 0, 0, 0);
   setuid(1001);
@@ -124,13 +129,10 @@ int main(int argc, char **argv) {
     LOGD("rilproxyd trigger file not found, listening on /dev/socket/rilproxy");
     rilproxy_socket = RILPROXY_SOCKET_NAME;
   }
-  
 
   // connect to the rilproxy socket
-  rilproxy_conn = socket_local_server(
-    rilproxy_socket,
-    ANDROID_SOCKET_NAMESPACE_RESERVED,
-    SOCK_STREAM );
+  rilproxy_conn = socket_local_server(rilproxy_socket,
+    ANDROID_SOCKET_NAMESPACE_RESERVED, SOCK_STREAM );
   if (rilproxy_conn < 0) {
     LOGE("Could not connect to %s socket: %s\n",
          RILPROXY_SOCKET_NAME, strerror(errno));
@@ -149,7 +151,6 @@ int main(int argc, char **argv) {
   } else {
     LOGE("Cannot convert to radio account, getpwuid error.");
   }
-
 
   int connected = 0;
 
@@ -221,11 +222,12 @@ int main(int argc, char **argv) {
         fds[0].revents = 0;
         while(1)
         {
-          ret = read(rilproxy_rw, data, 1024 + SUB_ID_SIZE);
+          ret = read(rilproxy_rw, data, RILD_MAX_DATA_SIZE);
           if(ret > 0) {
             int subId = data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3];
-            LOGD("rilproxy_rw, subId = %d",subId);
-            writeToSocket(rild_rw[subId], &data[SUB_ID_SIZE], ret - SUB_ID_SIZE);
+            int dataSize = data[4] << 24 | data[5] << 16 | data[6] << 8 | data[7];
+            LOGD("rilproxy_rw, subId = %d dataSize =%d ret = %d", subId, dataSize, ret);
+            writeToSocket(rild_rw[subId], &data[HEADER_SIZE], ret - HEADER_SIZE);
           }
           else if (ret <= 0)
           {
@@ -248,12 +250,13 @@ int main(int argc, char **argv) {
             data[1] = 0;
             data[2] = 0;
             data[3] = i;
-            ret = read(rild_rw[i], &data[HEADER_SIZE], 1024);
+            ret = read(rild_rw[i], &data[HEADER_SIZE], RIL_MAX_DATA_SIZE);
             if(ret > 0) {
               data[4] = (ret >> 24) & 0xff;
               data[5] = (ret >> 16) & 0xff;
               data[6] = (ret >> 8) & 0xff;
               data[7] =  ret & 0xff;
+              LOGD("rild_rw %d, ret = %d", i, ret);
               writeToSocket(rilproxy_rw, data, ret + HEADER_SIZE);
             }
             else if (ret <= 0) {
