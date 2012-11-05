@@ -201,7 +201,7 @@ int main(int argc, char **argv) {
       LOGD("Connected to socket %s\n", RILD_SOCKET_NAMES[i]);
     }
 
-    char data[1024 + HEADER_SIZE];
+    char data[RILD_MAX_DATA_SIZE];
     struct pollfd fds[NUM_RILD + 1];
     fds[0].fd = rilproxy_rw;
     fds[0].events = POLLIN;
@@ -235,7 +235,7 @@ int main(int argc, char **argv) {
             connected = 0;
             break;
           }
-          if(ret < 1024)
+          if(ret < RILD_MAX_DATA_SIZE)
           {
             break;
           }
@@ -264,7 +264,7 @@ int main(int argc, char **argv) {
               connected = 0;
               break;
             }
-            if(ret < 1024) {
+            if(ret < RILD_MAX_DATA_SIZE) {
               break;
             }
           }
